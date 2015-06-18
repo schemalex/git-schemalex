@@ -2,6 +2,7 @@ package gitschemalex
 
 import (
 	"database/sql"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -19,6 +20,20 @@ func TestRunner(t *testing.T) {
 	}
 	defer mysqld.Stop()
 
+	db, err := sql.Open("mysql", fmt.Sprintf("root:@%s/", mysqld.ConnectString(0)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec("CREATE DATABASE IF NOT EXISTS `test`"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := db.Exec("USE `test`"); err != nil {
+		t.Fatal(err)
+	}
+
 	dir, err := ioutil.TempDir("", "gitschemalex")
 	if err != nil {
 		t.Fatal(err)
@@ -30,6 +45,14 @@ func TestRunner(t *testing.T) {
 	}
 
 	if err := exec.Command("git", "init").Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := exec.Command("git", "config", "user.email", "hoge@example.com").Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := exec.Command("git", "config", "user.name", "hoge").Run(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -47,15 +70,15 @@ func TestRunner(t *testing.T) {
 	if err := exec.Command("git", "add", "schema.sql").Run(); err != nil {
 		t.Fatal(err)
 	}
-	if err := exec.Command("git", "commit", "--author", "hoge <hoge@example.com>", "-m", "initial commit").Run(); err != nil {
+
+	if err := exec.Command("git", "commit", "-m", "initial commit").Run(); err != nil {
 		t.Fatal(err)
 	}
 
-	dns := mysqld.Datasource("", "", "", 0)
 	r := &Runner{
 		Workspace: dir,
 		Deploy:    true,
-		Dns:       dns,
+		Dns:       mysqld.Datasource("", "", "", 0),
 		Table:     "git_schemalex_version",
 		Schema:    "schema.sql",
 	}
@@ -64,12 +87,6 @@ func TestRunner(t *testing.T) {
 	}
 
 	// deployed
-
-	db, err := sql.Open("mysql", dns)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
 
 	if _, err := db.Exec("INSERT INTO `hoge` (`id`, `c`) VALUES (1, '2')"); err != nil {
 		t.Fatal(err)

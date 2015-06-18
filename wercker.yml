@@ -24,6 +24,14 @@ build:
   steps:
     # Sets the go workspace and places you package
     # at the right place in the workspace tree
+    - script:
+        name: install packages
+        code: |
+          # http://stackoverflow.com/questions/7739645/install-mysql-on-ubuntu-without-password-prompt/7740393#7740393
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update
+          sudo apt-get install mysql-server git -y
+
     - setup-go-workspace
 
     # Gets the dependencies
