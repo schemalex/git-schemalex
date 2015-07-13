@@ -124,7 +124,10 @@ func (r *Runner) UpgradeSchema(db *sql.DB, schemaVersion string, dbVersion strin
 	}
 
 	differ := &schemalex.Differ{filterCreateTableStatement(stmts1), filterCreateTableStatement(stmts2)}
-	stmts := differ.DiffWithTransaction()
+	stmts, err := differ.DiffWithTransaction()
+	if err != nil {
+		return err
+	}
 
 	var queries []Query
 
