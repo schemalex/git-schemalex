@@ -22,7 +22,7 @@ see [go-sql-driver/mysql](https://github.com/go-sql-driver/mysql)
 
 ## SEE ALSO
 
-* https://github.com/soh335/schemalex
+* https://github.com/schemalex/schemalex
 * https://github.com/typester/GitDDL
 
 ## LICENSE
