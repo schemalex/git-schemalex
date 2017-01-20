@@ -78,7 +78,7 @@ func TestRunner(t *testing.T) {
 	r := &Runner{
 		Workspace: dir,
 		Deploy:    true,
-		Dns:       mysqld.Datasource("", "", "", 0),
+		DSN:       mysqld.Datasource("", "", "", 0),
 		Table:     "git_schemalex_version",
 		Schema:    "schema.sql",
 	}

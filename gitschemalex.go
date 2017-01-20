@@ -27,7 +27,7 @@ type Query struct {
 type Runner struct {
 	Workspace string
 	Deploy    bool
-	Dns       string
+	DSN       string
 	Table     string
 	Schema    string
 }
@@ -67,7 +67,7 @@ func (r *Runner) Run() error {
 }
 
 func (r *Runner) DB() (*sql.DB, error) {
-	return sql.Open("mysql", r.Dns)
+	return sql.Open("mysql", r.DSN)
 }
 
 func (r *Runner) DatabaseVersion(db *sql.DB) (version string, err error) {
