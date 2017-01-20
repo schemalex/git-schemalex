@@ -11,7 +11,7 @@ import (
 var (
 	workspace = flag.String("workspace", "", "workspace of git")
 	deploy    = flag.Bool("deploy", false, "deploy")
-	dns       = flag.String("dns", "", "")
+	dsn       = flag.String("dsn", "", "")
 	table     = flag.String("table", "git_schemalex_version", "table of git revision")
 	schema    = flag.String("schema", "", "path to schema file")
 )
@@ -27,7 +27,7 @@ func _main() error {
 	r := &gitschemalex.Runner{
 		Workspace: *workspace,
 		Deploy:    *deploy,
-		Dns:       *dns,
+		DSN:       *dsn,
 		Table:     *table,
 		Schema:    *schema,
 	}

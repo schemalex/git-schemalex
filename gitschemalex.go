@@ -1,6 +1,7 @@
 package gitschemalex
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -10,7 +11,8 @@ import (
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/soh335/schemalex"
+	"github.com/schemalex/schemalex"
+	"github.com/schemalex/schemalex/diff"
 )
 
 var (
@@ -25,7 +27,7 @@ type Query struct {
 type Runner struct {
 	Workspace string
 	Deploy    bool
-	Dns       string
+	DSN       string
 	Table     string
 	Schema    string
 }
@@ -65,7 +67,7 @@ func (r *Runner) Run() error {
 }
 
 func (r *Runner) DB() (*sql.DB, error) {
-	return sql.Open("mysql", r.Dns)
+	return sql.Open("mysql", r.DSN)
 }
 
 func (r *Runner) DatabaseVersion(db *sql.DB) (version string, err error) {
@@ -84,57 +86,35 @@ func (r *Runner) SchemaVersion() (string, error) {
 }
 
 func (r *Runner) DeploySchema(db *sql.DB, version string) error {
-	var queries []Query
 	content, err := r.schemaContent()
 	if err != nil {
 		return err
 	}
-	// TODO too casual...
-	for _, stmt := range strings.Split(content, ";") {
-		stmt = strings.TrimSpace(stmt)
-		if len(stmt) == 0 {
-			continue
-		}
-		queries = append(queries, Query{stmt, []interface{}{}})
-	}
+	queries := separateQueries(content)
 	queries = append(queries, Query{fmt.Sprintf("CREATE TABLE `%s` ( version VARCHAR(40) NOT NULL )", r.Table), []interface{}{}})
 	queries = append(queries, Query{fmt.Sprintf("INSERT INTO `%s` (version) VALUES (?)", r.Table), []interface{}{version}})
 	return r.execSql(db, queries)
 }
 
 func (r *Runner) UpgradeSchema(db *sql.DB, schemaVersion string, dbVersion string) error {
-	commitSchema, err := r.schemaSpecificCommit(dbVersion)
+
+	lastSchema, err := r.schemaSpecificCommit(dbVersion)
 	if err != nil {
 		return err
 	}
 
-	stmts1, err := schemalex.NewParser(commitSchema).Parse()
+	currentSchema, err := r.schemaContent()
+	if err != nil {
+		return err
+	}
+	stmts := &bytes.Buffer{}
+	p := schemalex.New()
+	err = diff.Strings(stmts, lastSchema, currentSchema, diff.WithTransaction(true), diff.WithParser(p))
 	if err != nil {
 		return err
 	}
 
-	content, err := r.schemaContent()
-	if err != nil {
-		return err
-	}
-
-	stmts2, err := schemalex.NewParser(content).Parse()
-	if err != nil {
-		return err
-	}
-
-	differ := &schemalex.Differ{filterCreateTableStatement(stmts1), filterCreateTableStatement(stmts2)}
-	stmts, err := differ.DiffWithTransaction()
-	if err != nil {
-		return err
-	}
-
-	var queries []Query
-
-	for _, stmt := range stmts {
-		queries = append(queries, Query{stmt, []interface{}{}})
-	}
-
+	queries := separateQueries(string(stmts.Bytes()))
 	queries = append(queries, Query{fmt.Sprintf("UPDATE %s SET version = ?", r.Table), []interface{}{schemaVersion}})
 
 	return r.execSql(db, queries)
@@ -203,13 +183,14 @@ func (r *Runner) execGitCmd(args ...string) ([]byte, error) {
 }
 
 // util
-func filterCreateTableStatement(stmts []schemalex.Stmt) []schemalex.CreateTableStatement {
-	var createTableStatements []schemalex.CreateTableStatement
-	for _, stmt := range stmts {
-		switch t := stmt.(type) {
-		case *schemalex.CreateTableStatement:
-			createTableStatements = append(createTableStatements, *t)
+func separateQueries(stmts string) []Query {
+	var queries []Query
+	for _, stmt := range strings.Split(stmts, ";") {
+		stmt = strings.TrimSpace(stmt)
+		if len(stmt) == 0 {
+			continue
 		}
+		queries = append(queries, Query{stmt, []interface{}{}})
 	}
-	return createTableStatements
+	return queries
 }
