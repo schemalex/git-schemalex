@@ -2,7 +2,6 @@ package gitschemalex
 
 import (
 	"database/sql"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
