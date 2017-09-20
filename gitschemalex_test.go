@@ -79,6 +79,10 @@ func TestRunner(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// This is a silly hack, but we need to change the DSN from "mysql" or
+	// whatever to "test"
+	re := regexp.MustCompile(`/[^/]+$`)
+	dsn = re.ReplaceAllString(dsn, `/test`)
 	r := &Runner{
 		Workspace: dir,
 		Deploy:    true,
@@ -91,7 +95,6 @@ func TestRunner(t *testing.T) {
 	}
 
 	// deployed
-
 	if _, err := db.Exec("INSERT INTO `hoge` (`id`, `c`) VALUES (1, '2')"); err != nil {
 		t.Fatal(err)
 	}
