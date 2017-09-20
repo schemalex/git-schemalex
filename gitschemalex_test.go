@@ -21,7 +21,7 @@ func TestRunner(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer mysqld.Stop()
-		dsn = myqld.DataSource("", "", "", 0)
+		dsn = mysqld.DataSource("", "", "", 0)
 	}
 
 	db, err := sql.Open("mysql", dsn)
