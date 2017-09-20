@@ -14,7 +14,7 @@ import (
 )
 
 func TestRunner(t *testing.T) {
-	var dsn = "root:@127.0.0.1:3306/mysql"
+	var dsn = "root:@tcp(127.0.0.1:3306)/mysql"
 	if ok, _ := strconv.ParseBool(os.Getenv("TRAVIS")); !ok {
 		mysqld, err := mysqltest.NewMysqld(nil)
 		if err != nil {
