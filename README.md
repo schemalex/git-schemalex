@@ -7,7 +7,7 @@ database migration tool for mysql schema is managed via git.
 ## DOWNLOAD
 
 ```
-$ go get github.com/soh335/git-schemalex/cmd/git-schemalex
+$ go get github.com/schemalex/git-schemalex/cmd/git-schemalex
 ```
 
 ## USAGE

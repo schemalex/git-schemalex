@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/soh335/git-schemalex"
+	"github.com/schemalex/git-schemalex"
 )
 
 var (
