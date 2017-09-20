@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -14,13 +15,17 @@ import (
 )
 
 func TestRunner(t *testing.T) {
-	mysqld, err := mysqltest.NewMysqld(nil)
-	if err != nil {
-		t.Fatal(err)
+	var dsn = "root:@127.0.0.1:3306"
+	if ok, _ := strconv.ParseBool(os.Getenv("TRAVIS")); !ok {
+		mysqld, err := mysqltest.NewMysqld(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer mysqld.Stop()
+		dsn = myqld.DataSource("", "", "", 0)
 	}
-	defer mysqld.Stop()
 
-	db, err := sql.Open("mysql", fmt.Sprintf("root:@%s/", mysqld.ConnectString(0)))
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +83,7 @@ func TestRunner(t *testing.T) {
 	r := &Runner{
 		Workspace: dir,
 		Deploy:    true,
-		DSN:       mysqld.Datasource("", "", "", 0),
+		DSN:       dsn,
 		Table:     "git_schemalex_version",
 		Schema:    "schema.sql",
 	}
