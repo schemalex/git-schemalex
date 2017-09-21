@@ -1,5 +1,3 @@
-[![wercker status](https://app.wercker.com/status/61f5b5a1645c12321164224e7d640db3/s/master "wercker status")](https://app.wercker.com/project/bykey/61f5b5a1645c12321164224e7d640db3)
-
 # git-schemalex
 
 database migration tool for mysql schema is managed via git.
