@@ -1,6 +1,7 @@
 package gitschemalex
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -14,8 +15,8 @@ type query struct {
 	args []interface{}
 }
 
-func (q *query) execute(db *sql.DB) error {
-	_, err := db.Exec(q.stmt, q.args...)
+func (q *query) execute(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx, q.stmt, q.args...)
 	return errors.Wrap(err, `failed to execute query`)
 }
 
@@ -58,9 +59,9 @@ func (l *queryList) dump(dst io.Writer) error {
 	return nil
 }
 
-func (l *queryList) execute(db *sql.DB) error {
+func (l *queryList) execute(ctx context.Context, db *sql.DB) error {
 	for i, q := range *l {
-		if err := q.execute(db); err != nil {
+		if err := q.execute(ctx, db); err != nil {
 			return errors.Wrapf(err, `failed to execute query %d`, i+1)
 		}
 	}

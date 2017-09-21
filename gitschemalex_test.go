@@ -1,6 +1,7 @@
 package gitschemalex
 
 import (
+	"context"
 	"database/sql"
 	"io/ioutil"
 	"os"
@@ -91,7 +92,7 @@ func TestRunner(t *testing.T) {
 		Table:     "git_schemalex_version",
 		Schema:    "schema.sql",
 	}
-	if err := r.Run(); err != nil {
+	if err := r.Run(context.TODO()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -113,7 +114,7 @@ func TestRunner(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := r.Run(); err != nil {
+	if err := r.Run(context.TODO()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -122,8 +123,7 @@ func TestRunner(t *testing.T) {
 	}
 
 	// equal version
-
-	if e, g := ErrEqualVersion, r.Run(); e != g {
+	if e, g := ErrEqualVersion, r.Run(context.TODO()); e != g {
 		t.Fatal("should %v got %v", e, g)
 	}
 }
