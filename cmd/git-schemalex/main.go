@@ -14,6 +14,7 @@ import (
 
 var (
 	workspace = flag.String("workspace", "", "workspace of git")
+	commit    = flag.String("commit", "HEAD", "target git commit hash")
 	deploy    = flag.Bool("deploy", false, "deploy")
 	dsn       = flag.String("dsn", "", "")
 	table     = flag.String("table", "git_schemalex_version", "table of git revision")
@@ -44,13 +45,14 @@ func _main() error {
 		}
 	}()
 
-	r := &gitschemalex.Runner{
-		Workspace: *workspace,
-		Deploy:    *deploy,
-		DSN:       *dsn,
-		Table:     *table,
-		Schema:    *schema,
-	}
+	r := gitschemalex.New()
+	r.Workspace = *workspace
+	r.Commit = *commit
+	r.Deploy = *deploy
+	r.DSN = *dsn
+	r.Table = *table
+	r.Schema = *schema
+
 	err := r.Run(ctx)
 	if err == gitschemalex.ErrEqualVersion {
 		fmt.Println(err.Error())

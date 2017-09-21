@@ -6,10 +6,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -23,23 +21,29 @@ var (
 
 type Runner struct {
 	Workspace string
+	Commit    string
 	Deploy    bool
 	DSN       string
 	Table     string
 	Schema    string
 }
 
+func New() *Runner {
+	return &Runner{
+		Commit: "HEAD",
+		Deploy: false,
+	}
+}
+
 func (r *Runner) Run(ctx context.Context) error {
 	db, err := r.DB()
-
 	if err != nil {
 		return err
 	}
-
 	defer db.Close()
 
-	schemaVersion, err := r.SchemaVersion(ctx)
-	if err != nil {
+	var schemaVersion string
+	if err := r.SchemaVersion(ctx, &schemaVersion); err != nil {
 		return err
 	}
 
@@ -70,20 +74,24 @@ func (r *Runner) DatabaseVersion(ctx context.Context, db *sql.DB, version *strin
 	return db.QueryRowContext(ctx, fmt.Sprintf("SELECT version FROM `%s`", r.Table)).Scan(version)
 }
 
-func (r *Runner) SchemaVersion(ctx context.Context) (string, error) {
-	byt, err := r.execGitCmd(ctx, "log", "-n", "1", "--pretty=format:%H", "--", r.Schema)
-	if err != nil {
-		return "", err
-	}
-
-	return string(byt), nil
-}
-
-func (r *Runner) DeploySchema(ctx context.Context, db *sql.DB, version string) error {
-	content, err := r.schemaContent()
+func (r *Runner) SchemaVersion(ctx context.Context, version *string) error {
+	// git rev-parse takes things like "HEAD" or commit hash, and gives
+	// us the corresponding commit hash
+	v, err := r.execGitCmd(ctx, "rev-parse", r.Commit)
 	if err != nil {
 		return err
 	}
+
+	*version = string(v)
+	return nil
+}
+
+func (r *Runner) DeploySchema(ctx context.Context, db *sql.DB, version string) error {
+	var content string
+	if err := r.schemaSpecificCommit(ctx, version, &content); err != nil {
+		return err
+	}
+
 	queries := queryListFromString(content)
 	queries.AppendStmt(fmt.Sprintf("CREATE TABLE `%s` ( version VARCHAR(40) NOT NULL )", r.Table))
 	queries.AppendStmt(fmt.Sprintf("INSERT INTO `%s` (version) VALUES (?)", r.Table), version)
@@ -91,19 +99,18 @@ func (r *Runner) DeploySchema(ctx context.Context, db *sql.DB, version string) e
 }
 
 func (r *Runner) UpgradeSchema(ctx context.Context, db *sql.DB, schemaVersion string, dbVersion string) error {
-	lastSchema, err := r.schemaSpecificCommit(ctx, dbVersion)
-	if err != nil {
+	var lastSchema string
+	if err := r.schemaSpecificCommit(ctx, dbVersion, &lastSchema); err != nil {
 		return err
 	}
 
-	currentSchema, err := r.schemaContent()
-	if err != nil {
+	var currentSchema string
+	if err := r.schemaSpecificCommit(ctx, schemaVersion, &currentSchema); err != nil {
 		return err
 	}
 	stmts := &bytes.Buffer{}
 	p := schemalex.New()
-	err = diff.Strings(stmts, lastSchema, currentSchema, diff.WithTransaction(true), diff.WithParser(p))
-	if err != nil {
+	if err := diff.Strings(stmts, lastSchema, currentSchema, diff.WithTransaction(true), diff.WithParser(p)); err != nil {
 		return err
 	}
 
@@ -115,21 +122,20 @@ func (r *Runner) UpgradeSchema(ctx context.Context, db *sql.DB, schemaVersion st
 
 // private
 
-func (r *Runner) schemaSpecificCommit(ctx context.Context, commit string) (string, error) {
-	byt, err := r.execGitCmd(ctx, "ls-tree", commit, "--", r.Schema)
-
+func (r *Runner) schemaSpecificCommit(ctx context.Context, commit string, dst *string) error {
+	// Old code used to do ls-tree and then cat-file, but I don't see why
+	// you need to do this.
+	// Doing
+	// > fields := git ls-tree $commit -- $schema_file
+	// And then taking fields[2] just gives us back $commit.
+	// showing the contents at the point of commit using "git show" is much simpler
+	v, err := r.execGitCmd(ctx, "show", fmt.Sprintf("%s:%s", commit, r.Schema))
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	fields := strings.Fields(string(byt))
-
-	byt, err = r.execGitCmd(ctx, "cat-file", "blob", fields[2])
-	if err != nil {
-		return "", err
-	}
-
-	return string(byt), nil
+	*dst = string(v)
+	return nil
 }
 
 func (r *Runner) execSql(ctx context.Context, db *sql.DB, queries queryList) error {
@@ -137,14 +143,6 @@ func (r *Runner) execSql(ctx context.Context, db *sql.DB, queries queryList) err
 		return queries.dump(os.Stdout)
 	}
 	return queries.execute(ctx, db)
-}
-
-func (r *Runner) schemaContent() (string, error) {
-	byt, err := ioutil.ReadFile(filepath.Join(r.Workspace, r.Schema))
-	if err != nil {
-		return "", err
-	}
-	return string(byt), nil
 }
 
 func (r *Runner) execGitCmd(ctx context.Context, args ...string) ([]byte, error) {

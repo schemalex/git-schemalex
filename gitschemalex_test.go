@@ -13,6 +13,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/lestrrat/go-test-mysqld"
+	gitschemalex "github.com/schemalex/git-schemalex"
 )
 
 func TestRunner(t *testing.T) {
@@ -85,13 +86,12 @@ func TestRunner(t *testing.T) {
 	// whatever to "test"
 	re := regexp.MustCompile(`/[^/]+$`)
 	dsn = re.ReplaceAllString(dsn, `/test`)
-	r := &Runner{
-		Workspace: dir,
-		Deploy:    true,
-		DSN:       dsn,
-		Table:     "git_schemalex_version",
-		Schema:    "schema.sql",
-	}
+	r := gitschemalex.New()
+	r.Workspace = dir
+	r.Deploy = true
+	r.DSN = dsn
+	r.Table = "git_schemalex_version"
+	r.Schema = "schema.sql"
 	if err := r.Run(context.TODO()); err != nil {
 		t.Fatal(err)
 	}
