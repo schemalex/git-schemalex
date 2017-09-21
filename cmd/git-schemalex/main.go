@@ -16,7 +16,7 @@ var (
 	workspace = flag.String("workspace", "", "workspace of git")
 	commit    = flag.String("commit", "HEAD", "target git commit hash")
 	deploy    = flag.Bool("deploy", false, "deploy")
-	dsn       = flag.String("dsn", "", "")
+	dsn       = flag.String("dsn", "root:@tcp(127.0.0.1:3306)/test", "DSN of the target mysql instance")
 	table     = flag.String("table", "git_schemalex_version", "table of git revision")
 	schema    = flag.String("schema", "", "path to schema file")
 )
