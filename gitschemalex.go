@@ -82,7 +82,7 @@ func (r *Runner) SchemaVersion(ctx context.Context, version *string) error {
 		return err
 	}
 
-	*version = string(v)
+	*version = string(bytes.TrimSpace(v))
 	return nil
 }
 
