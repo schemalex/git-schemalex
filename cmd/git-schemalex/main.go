@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/schemalex/git-schemalex"
 )
@@ -24,6 +28,22 @@ func main() {
 }
 
 func _main() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-sigCh:
+			cancel()
+			return
+		}
+	}()
+
 	r := &gitschemalex.Runner{
 		Workspace: *workspace,
 		Deploy:    *deploy,
@@ -31,7 +51,7 @@ func _main() error {
 		Table:     *table,
 		Schema:    *schema,
 	}
-	err := r.Run()
+	err := r.Run(ctx)
 	if err == gitschemalex.ErrEqualVersion {
 		fmt.Println(err.Error())
 		return nil

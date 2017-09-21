@@ -2,6 +2,7 @@ package gitschemalex
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -28,7 +29,7 @@ type Runner struct {
 	Schema    string
 }
 
-func (r *Runner) Run() error {
+func (r *Runner) Run(ctx context.Context) error {
 	db, err := r.DB()
 
 	if err != nil {
@@ -37,25 +38,24 @@ func (r *Runner) Run() error {
 
 	defer db.Close()
 
-	schemaVersion, err := r.SchemaVersion()
+	schemaVersion, err := r.SchemaVersion(ctx)
 	if err != nil {
 		return err
 	}
 
-	dbVersion, err := r.DatabaseVersion(db)
-
-	if err != nil {
+	var dbVersion string
+	if err := r.DatabaseVersion(ctx, db, &dbVersion); err != nil {
 		if !strings.Contains(err.Error(), "doesn't exist") {
 			return err
 		}
-		return r.DeploySchema(db, schemaVersion)
+		return r.DeploySchema(ctx, db, schemaVersion)
 	}
 
 	if dbVersion == schemaVersion {
 		return ErrEqualVersion
 	}
 
-	if err := r.UpgradeSchema(db, schemaVersion, dbVersion); err != nil {
+	if err := r.UpgradeSchema(ctx, db, schemaVersion, dbVersion); err != nil {
 		return err
 	}
 
@@ -66,14 +66,12 @@ func (r *Runner) DB() (*sql.DB, error) {
 	return sql.Open("mysql", r.DSN)
 }
 
-func (r *Runner) DatabaseVersion(db *sql.DB) (version string, err error) {
-	err = db.QueryRow(fmt.Sprintf("SELECT version FROM `%s`", r.Table)).Scan(&version)
-	return
+func (r *Runner) DatabaseVersion(ctx context.Context, db *sql.DB, version *string) error {
+	return db.QueryRowContext(ctx, fmt.Sprintf("SELECT version FROM `%s`", r.Table)).Scan(version)
 }
 
-func (r *Runner) SchemaVersion() (string, error) {
-
-	byt, err := r.execGitCmd("log", "-n", "1", "--pretty=format:%H", "--", r.Schema)
+func (r *Runner) SchemaVersion(ctx context.Context) (string, error) {
+	byt, err := r.execGitCmd(ctx, "log", "-n", "1", "--pretty=format:%H", "--", r.Schema)
 	if err != nil {
 		return "", err
 	}
@@ -81,7 +79,7 @@ func (r *Runner) SchemaVersion() (string, error) {
 	return string(byt), nil
 }
 
-func (r *Runner) DeploySchema(db *sql.DB, version string) error {
+func (r *Runner) DeploySchema(ctx context.Context, db *sql.DB, version string) error {
 	content, err := r.schemaContent()
 	if err != nil {
 		return err
@@ -89,12 +87,11 @@ func (r *Runner) DeploySchema(db *sql.DB, version string) error {
 	queries := queryListFromString(content)
 	queries.AppendStmt(fmt.Sprintf("CREATE TABLE `%s` ( version VARCHAR(40) NOT NULL )", r.Table))
 	queries.AppendStmt(fmt.Sprintf("INSERT INTO `%s` (version) VALUES (?)", r.Table), version)
-	return r.execSql(db, queries)
+	return r.execSql(ctx, db, queries)
 }
 
-func (r *Runner) UpgradeSchema(db *sql.DB, schemaVersion string, dbVersion string) error {
-
-	lastSchema, err := r.schemaSpecificCommit(dbVersion)
+func (r *Runner) UpgradeSchema(ctx context.Context, db *sql.DB, schemaVersion string, dbVersion string) error {
+	lastSchema, err := r.schemaSpecificCommit(ctx, dbVersion)
 	if err != nil {
 		return err
 	}
@@ -113,13 +110,13 @@ func (r *Runner) UpgradeSchema(db *sql.DB, schemaVersion string, dbVersion strin
 	queries := queryListFromString(stmts.String())
 	queries.AppendStmt(fmt.Sprintf("UPDATE %s SET version = ?", r.Table), schemaVersion)
 
-	return r.execSql(db, queries)
+	return r.execSql(ctx, db, queries)
 }
 
 // private
 
-func (r *Runner) schemaSpecificCommit(commit string) (string, error) {
-	byt, err := r.execGitCmd("ls-tree", commit, "--", r.Schema)
+func (r *Runner) schemaSpecificCommit(ctx context.Context, commit string) (string, error) {
+	byt, err := r.execGitCmd(ctx, "ls-tree", commit, "--", r.Schema)
 
 	if err != nil {
 		return "", err
@@ -127,7 +124,7 @@ func (r *Runner) schemaSpecificCommit(commit string) (string, error) {
 
 	fields := strings.Fields(string(byt))
 
-	byt, err = r.execGitCmd("cat-file", "blob", fields[2])
+	byt, err = r.execGitCmd(ctx, "cat-file", "blob", fields[2])
 	if err != nil {
 		return "", err
 	}
@@ -135,11 +132,11 @@ func (r *Runner) schemaSpecificCommit(commit string) (string, error) {
 	return string(byt), nil
 }
 
-func (r *Runner) execSql(db *sql.DB, queries queryList) error {
+func (r *Runner) execSql(ctx context.Context, db *sql.DB, queries queryList) error {
 	if !r.Deploy {
 		return queries.dump(os.Stdout)
 	}
-	return queries.execute(db)
+	return queries.execute(ctx, db)
 }
 
 func (r *Runner) schemaContent() (string, error) {
@@ -150,8 +147,8 @@ func (r *Runner) schemaContent() (string, error) {
 	return string(byt), nil
 }
 
-func (r *Runner) execGitCmd(args ...string) ([]byte, error) {
-	cmd := exec.Command("git", args...)
+func (r *Runner) execGitCmd(ctx context.Context, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
 	if r.Workspace != "" {
 		cmd.Dir = r.Workspace
 	}
