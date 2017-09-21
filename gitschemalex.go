@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -18,11 +19,6 @@ import (
 var (
 	ErrEqualVersion = errors.New("db version is equal to schema version")
 )
-
-type Query struct {
-	Str  string
-	Args []interface{}
-}
 
 type Runner struct {
 	Workspace string
@@ -90,9 +86,9 @@ func (r *Runner) DeploySchema(db *sql.DB, version string) error {
 	if err != nil {
 		return err
 	}
-	queries := separateQueries(content)
-	queries = append(queries, Query{fmt.Sprintf("CREATE TABLE `%s` ( version VARCHAR(40) NOT NULL )", r.Table), []interface{}{}})
-	queries = append(queries, Query{fmt.Sprintf("INSERT INTO `%s` (version) VALUES (?)", r.Table), []interface{}{version}})
+	queries := queryListFromString(content)
+	queries.AppendStmt(fmt.Sprintf("CREATE TABLE `%s` ( version VARCHAR(40) NOT NULL )", r.Table))
+	queries.AppendStmt(fmt.Sprintf("INSERT INTO `%s` (version) VALUES (?)", r.Table), version)
 	return r.execSql(db, queries)
 }
 
@@ -114,8 +110,8 @@ func (r *Runner) UpgradeSchema(db *sql.DB, schemaVersion string, dbVersion strin
 		return err
 	}
 
-	queries := separateQueries(string(stmts.Bytes()))
-	queries = append(queries, Query{fmt.Sprintf("UPDATE %s SET version = ?", r.Table), []interface{}{schemaVersion}})
+	queries := queryListFromString(stmts.String())
+	queries.AppendStmt(fmt.Sprintf("UPDATE %s SET version = ?", r.Table), schemaVersion)
 
 	return r.execSql(db, queries)
 }
@@ -139,25 +135,11 @@ func (r *Runner) schemaSpecificCommit(commit string) (string, error) {
 	return string(byt), nil
 }
 
-func (r *Runner) execSql(db *sql.DB, queries []Query) error {
+func (r *Runner) execSql(db *sql.DB, queries queryList) error {
 	if !r.Deploy {
-		for _, query := range queries {
-			if len(query.Args) == 0 {
-				fmt.Printf("%s;\n\n", query.Str)
-			} else {
-				fmt.Printf("%s; %v\n\n", query.Str, query.Args)
-			}
-		}
-		return nil
+		return queries.dump(os.Stdout)
 	}
-
-	for _, query := range queries {
-		if _, err := db.Exec(query.Str, query.Args...); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return queries.execute(db)
 }
 
 func (r *Runner) schemaContent() (string, error) {
@@ -180,17 +162,4 @@ func (r *Runner) execGitCmd(args ...string) ([]byte, error) {
 	}
 
 	return byt, nil
-}
-
-// util
-func separateQueries(stmts string) []Query {
-	var queries []Query
-	for _, stmt := range strings.Split(stmts, ";") {
-		stmt = strings.TrimSpace(stmt)
-		if len(stmt) == 0 {
-			continue
-		}
-		queries = append(queries, Query{stmt, []interface{}{}})
-	}
-	return queries
 }
