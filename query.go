@@ -2,10 +2,11 @@ package gitschemalex
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 type query struct {
@@ -14,10 +15,11 @@ type query struct {
 }
 
 func (q *query) execute(db *sql.DB) error {
-	return errors.Wrap(db.Exec(q.stmt, q.args...), `failed to execute query`)
+	_, err := db.Exec(q.stmt, q.args...)
+	return errors.Wrap(err, `failed to execute query`)
 }
 
-func (q *query) dump(ds io.Writer) error {
+func (q *query) dump(dst io.Writer) error {
 	fmt.Fprintf(dst, "%s;", q.stmt)
 	if len(q.args) > 0 {
 		fmt.Fprintf(dst, "%v", q.args)
@@ -28,7 +30,7 @@ func (q *query) dump(ds io.Writer) error {
 
 type queryList []*query
 
-func queryListFromString(s string) queryList {
+func queryListFromString(stmts string) queryList {
 	var l queryList
 	for _, stmt := range strings.Split(stmts, ";") {
 		stmt = strings.TrimSpace(stmt)
