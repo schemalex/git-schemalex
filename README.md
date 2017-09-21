@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/schemalex/git-schemalex.svg?branch=master)](https://travis-ci.org/schemalex/git-schemalex)
+
 # git-schemalex
 
 database migration tool for mysql schema is managed via git.
