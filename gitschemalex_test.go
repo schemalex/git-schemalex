@@ -123,7 +123,7 @@ func TestRunner(t *testing.T) {
 	}
 
 	// equal version
-	if e, g := ErrEqualVersion, r.Run(context.TODO()); e != g {
-		t.Fatal("should %v got %v", e, g)
+	if err := r.Run(context.TODO()); err != ErrEqualVersion {
+		t.Fatal("should %v got %v", err, ErrEqualVersion)
 	}
 }
