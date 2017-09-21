@@ -2,11 +2,12 @@ package gitschemalex
 
 import (
 	"database/sql"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -14,13 +15,17 @@ import (
 )
 
 func TestRunner(t *testing.T) {
-	mysqld, err := mysqltest.NewMysqld(nil)
-	if err != nil {
-		t.Fatal(err)
+	var dsn = "root:@tcp(127.0.0.1:3306)/mysql"
+	if ok, _ := strconv.ParseBool(os.Getenv("TRAVIS")); !ok {
+		mysqld, err := mysqltest.NewMysqld(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer mysqld.Stop()
+		dsn = mysqld.DSN()
 	}
-	defer mysqld.Stop()
 
-	db, err := sql.Open("mysql", fmt.Sprintf("root:@%s/", mysqld.ConnectString(0)))
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,10 +80,14 @@ func TestRunner(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// This is a silly hack, but we need to change the DSN from "mysql" or
+	// whatever to "test"
+	re := regexp.MustCompile(`/[^/]+$`)
+	dsn = re.ReplaceAllString(dsn, `/test`)
 	r := &Runner{
 		Workspace: dir,
 		Deploy:    true,
-		DSN:       mysqld.Datasource("", "", "", 0),
+		DSN:       dsn,
 		Table:     "git_schemalex_version",
 		Schema:    "schema.sql",
 	}
@@ -87,7 +96,6 @@ func TestRunner(t *testing.T) {
 	}
 
 	// deployed
-
 	if _, err := db.Exec("INSERT INTO `hoge` (`id`, `c`) VALUES (1, '2')"); err != nil {
 		t.Fatal(err)
 	}
